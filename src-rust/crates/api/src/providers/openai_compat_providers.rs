@@ -289,14 +289,36 @@ pub fn moonshot() -> OpenAiCompatProvider {
 }
 
 /// Zhipu AI / GLM.  Reads `ZHIPU_API_KEY`.
+///
+/// Also supports the Z.AI coding platform endpoint via the `ZAI_API_KEY`
+/// environment variable.  When `ZAI_API_KEY` is present it takes precedence
+/// over `ZHIPU_API_KEY` and the base URL is switched to the Z.AI coding
+/// PAAS endpoint (`api.z.ai`).
 pub fn zhipu() -> OpenAiCompatProvider {
-    let key = std::env::var("ZHIPU_API_KEY").unwrap_or_default();
+    // Z.AI coding platform takes precedence over plain Zhipu key.
+    let (key, base_url) = if let Ok(k) = std::env::var("ZAI_API_KEY") {
+        if !k.is_empty() {
+            (k, "https://api.z.ai/api/coding/paas/v4".to_string())
+        } else {
+            let zk = std::env::var("ZHIPU_API_KEY").unwrap_or_default();
+            (zk, "https://open.bigmodel.cn/api/paas/v4".to_string())
+        }
+    } else {
+        let zk = std::env::var("ZHIPU_API_KEY").unwrap_or_default();
+        (zk, "https://open.bigmodel.cn/api/paas/v4".to_string())
+    };
+
     OpenAiCompatProvider::new(
         ProviderId::ZHIPU,
         "Zhipu AI",
-        "https://open.bigmodel.cn/api/paas/v4",
+        base_url,
     )
     .with_api_key(key)
+    .with_quirks(ProviderQuirks {
+        // GLM-5.1 exposes reasoning via the same field as DeepSeek.
+        reasoning_field: Some("reasoning_content".to_string()),
+        ..Default::default()
+    })
 }
 
 /// Nebius — Llama / Qwen hosting.  Reads `NEBIUS_API_KEY`.
